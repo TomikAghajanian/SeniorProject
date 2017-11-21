@@ -14,8 +14,10 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+
 public class CoordinatesController {
     private JSONObject finalResponse;
+
 
     @Autowired
     Coordinates coordinates;

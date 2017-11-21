@@ -5,6 +5,7 @@ import com.google.gson.GsonBuilder;
 import com.google.maps.*;
 import com.google.maps.errors.ApiException;
 import com.google.maps.model.*;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -12,13 +13,15 @@ import java.io.IOException;
 @Service
 public class Coordinates {
     private GeoApiContext context;
-    private final String API_KEY = "AIzaSyBenRTIwXQY_cGIDJtDGR15vHanewFRfIg";
+    private String apiKey;
     private Gson gson;
 
-    public Coordinates() {
+    @Autowired
+    public Coordinates(ReadApiKey readApiKey) {
+        apiKey = readApiKey.getApiKey();
         gson = new GsonBuilder().setPrettyPrinting().create();
         this.context = new GeoApiContext.Builder()
-                .apiKey(API_KEY)
+                .apiKey(apiKey)
                 .build();
     }
 

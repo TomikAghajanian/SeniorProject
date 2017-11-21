@@ -5,18 +5,21 @@ import com.google.gson.GsonBuilder;
 import com.google.maps.DistanceMatrixApi;
 import com.google.maps.GeoApiContext;
 import com.google.maps.model.DistanceMatrix;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
 public class Distance {
     private GeoApiContext context;
-    private final String API_KEY = "AIzaSyBenRTIwXQY_cGIDJtDGR15vHanewFRfIg";
+    private String apiKey;
     private Gson gson;
 
-    public Distance() {
+    @Autowired
+    public Distance(ReadApiKey readApiKey) {
+        apiKey = readApiKey.getApiKey();
         gson = new GsonBuilder().setPrettyPrinting().create();
         this.context = new GeoApiContext.Builder()
-                .apiKey(API_KEY)
+                .apiKey(apiKey)
                 .build();
     }
 
