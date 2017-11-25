@@ -2,63 +2,79 @@ package com.seniorproject.controller;
 
 import com.google.maps.model.DistanceMatrix;
 import com.google.maps.model.GeocodingResult;
-import com.seniorproject.services.Coordinates;
-import com.seniorproject.services.Distance;
+import com.seniorproject.services.ILocationService;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
 
 @RestController
 
 public class CoordinatesController {
-    private JSONObject finalResponse;
-
-
     @Autowired
-    Coordinates coordinates;
+    ILocationService locationService;
 
-    @Autowired
-    Distance distance;
+    @RequestMapping(value = "/coordinates", method = RequestMethod.GET, produces = "application/json")
+    public ResponseEntity<String> getAddressLatLong(@RequestParam(value = "address") String address) {
+        JSONObject finalResponse = new JSONObject();
 
-    @RequestMapping(value = "/get/coordinates", method = RequestMethod.POST, produces = "application/json")
-    public ResponseEntity<String> getAddressLatLong(@RequestBody String address) {
-        JSONObject clientRequest = new JSONObject(address);
-        finalResponse = new JSONObject();
-
-        GeocodingResult results = coordinates.getCoordinates(clientRequest.getString("address"));
-
-        if (results == null) {
+        GeocodingResult results;
+        try {
+            results = locationService.getCoordinates(address);
+        } catch (Exception e) {
             finalResponse.put("error", "Internal server error");
-            return new ResponseEntity<>(this.finalResponse.toString(), HttpStatus.INTERNAL_SERVER_ERROR);
+            return new ResponseEntity<>(finalResponse.toString(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
-        double lat = results.geometry.location.lat;
-        double lng = results.geometry.location.lng;
 
-        finalResponse.put("lat", lat);
-        finalResponse.put("long", lng);
+        if (results == null || results.geometry == null || results.geometry.location == null) {
+            finalResponse.put("error", "Internal server error");
+            return new ResponseEntity<>(finalResponse.toString(), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
 
-        return new ResponseEntity<>(this.finalResponse.toString(), HttpStatus.OK);
+        finalResponse.put("lat", results.geometry.location.lat);
+        finalResponse.put("long", results.geometry.location.lng);
+
+        return new ResponseEntity<>(finalResponse.toString(), HttpStatus.OK);
     }
 
-    @RequestMapping(value = "/get/distanceandtime", method = RequestMethod.POST, produces = "application/json")
-    public ResponseEntity<String> getAddressDirections(@RequestBody String request) {
-        JSONObject addresses = new JSONObject(request);
-        finalResponse = new JSONObject();
+    @RequestMapping(value = "/distanceandduration", method = RequestMethod.GET, produces = "application/json")
+    public ResponseEntity<String> getAddressDirections(@RequestParam Map<String, String> requestParams) {
+        JSONObject finalResponse = new JSONObject();
+        String origin;
+        String destination;
 
-        DistanceMatrix distanceMatrix = distance.getDistanceAndTime(addresses.getString("origin"), addresses.getString("destination"));
+        try {
+            origin = requestParams.get("origin");
+            destination = requestParams.get("destination");
+        } catch (Exception e) {
+            finalResponse.put("error", "Request parameters \"origin\" and \"destination\" not found.");
+            return new ResponseEntity<>(finalResponse.toString(), HttpStatus.BAD_REQUEST);
+        }
+
+        DistanceMatrix distanceMatrix;
+        try {
+            distanceMatrix = locationService.getDistanceAndTime(origin, destination);
+        } catch (Exception e) {
+            finalResponse.put("error", "Internal server error");
+            return new ResponseEntity<>(finalResponse.toString(), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
 
         if (distanceMatrix == null) {
             finalResponse.put("error", "Internal server error");
-            return new ResponseEntity<>(this.finalResponse.toString(), HttpStatus.INTERNAL_SERVER_ERROR);
+            return new ResponseEntity<>(finalResponse.toString(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
+
+        if (distanceMatrix.rows[0] == null || distanceMatrix.rows[0].elements[0] == null) {
+            finalResponse.put("error", "Unexpected error");
+            return new ResponseEntity<>(finalResponse.toString(), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+        
         finalResponse.put("distance", distanceMatrix.rows[0].elements[0].distance.humanReadable);
         finalResponse.put("time", distanceMatrix.rows[0].elements[0].duration.humanReadable);
 
-        return new ResponseEntity<>(this.finalResponse.toString(), HttpStatus.OK);
+        return new ResponseEntity<>(finalResponse.toString(), HttpStatus.OK);
     }
 }

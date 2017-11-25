@@ -11,13 +11,13 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 
 @Service
-public class Coordinates {
+public class LocationService implements ILocationService{
     private GeoApiContext context;
     private String apiKey;
     private Gson gson;
 
     @Autowired
-    public Coordinates(ReadApiKey readApiKey) {
+    public LocationService(ReadApiKey readApiKey) {
         apiKey = readApiKey.getApiKey();
         gson = new GsonBuilder().setPrettyPrinting().create();
         this.context = new GeoApiContext.Builder()
@@ -44,5 +44,17 @@ public class Coordinates {
         return null;
     }
 
+    public DistanceMatrix getDistanceAndTime(String origin, String destination) {
+        try {
+            DistanceMatrix distanceMatrix = DistanceMatrixApi.newRequest(this.context).origins(origin).destinations(destination).await();
+            if (distanceMatrix.rows.length == 0 || distanceMatrix.rows[0].elements.length == 0) {
+                throw new RuntimeException("No distance and duration found.");
+            }
+            return distanceMatrix;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
 
 }

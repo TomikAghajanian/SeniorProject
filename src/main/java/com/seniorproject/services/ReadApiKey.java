@@ -22,10 +22,8 @@ public class ReadApiKey {
             }
 
             JSONObject jsonObject = (JSONObject) obj;
-            System.out.println(jsonObject);
 
             String key = (String) jsonObject.get("key");
-            System.out.println(key);
             return key;
         } catch (Exception e) {
             e.printStackTrace();
