@@ -17,6 +17,11 @@ public class CoordinatesController {
     @Autowired
     ILocationService locationService;
 
+    @RequestMapping(value="/login", method = RequestMethod.GET)
+    public ResponseEntity<String> login(){
+        return new ResponseEntity<>(new String("hello"), HttpStatus.OK);
+    }
+
     @RequestMapping(value = "/coordinates", method = RequestMethod.GET, produces = "application/json")
     public ResponseEntity<String> getAddressLatLong(@RequestParam(value = "address") String address) {
         JSONObject finalResponse = new JSONObject();
@@ -71,7 +76,7 @@ public class CoordinatesController {
             finalResponse.put("error", "Unexpected error");
             return new ResponseEntity<>(finalResponse.toString(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
-        
+
         finalResponse.put("distance", distanceMatrix.rows[0].elements[0].distance.humanReadable);
         finalResponse.put("time", distanceMatrix.rows[0].elements[0].duration.humanReadable);
 
