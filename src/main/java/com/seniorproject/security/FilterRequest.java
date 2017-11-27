@@ -38,7 +38,7 @@ public class FilterRequest implements Filter {
                 String credentials = new String(Base64.getDecoder().decode(base64Credentials), Charset.forName("UTF-8"));
                 final String[] userAndPass = credentials.split(":", 2);
 
-                
+
             } else {
                 response.sendError(HttpStatus.BAD_REQUEST.value(), "no basic authorization provided");
             }

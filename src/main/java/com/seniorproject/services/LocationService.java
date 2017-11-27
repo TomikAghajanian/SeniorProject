@@ -11,17 +11,15 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 
 @Service
-public class LocationService implements ILocationService{
+public class LocationService implements ILocationService {
     private GeoApiContext context;
-    private String apiKey;
     private Gson gson;
 
     @Autowired
-    public LocationService(ReadApiKey readApiKey) {
-        apiKey = readApiKey.getApiKey();
+    public LocationService(IDatabase database) {
         gson = new GsonBuilder().setPrettyPrinting().create();
         this.context = new GeoApiContext.Builder()
-                .apiKey(apiKey)
+                .apiKey(database.getApiKey())
                 .build();
     }
 

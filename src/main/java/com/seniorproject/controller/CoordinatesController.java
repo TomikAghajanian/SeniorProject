@@ -2,6 +2,7 @@ package com.seniorproject.controller;
 
 import com.google.maps.model.DistanceMatrix;
 import com.google.maps.model.GeocodingResult;
+import com.seniorproject.services.IDatabase;
 import com.seniorproject.services.ILocationService;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,6 +17,9 @@ import java.util.Map;
 public class CoordinatesController {
     @Autowired
     ILocationService locationService;
+
+    @Autowired
+    IDatabase database;
 
     @RequestMapping(value="/login", method = RequestMethod.GET)
     public ResponseEntity<String> login(){
@@ -54,6 +58,8 @@ public class CoordinatesController {
         try {
             origin = requestParams.get("origin");
             destination = requestParams.get("destination");
+
+            database.inputClientSession(1, origin+destination);
         } catch (Exception e) {
             finalResponse.put("error", "Request parameters \"origin\" and \"destination\" not found.");
             return new ResponseEntity<>(finalResponse.toString(), HttpStatus.BAD_REQUEST);
