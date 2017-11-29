@@ -5,6 +5,8 @@ import com.google.maps.model.GeocodingResult;
 import com.seniorproject.services.IDatabase;
 import com.seniorproject.services.ILocationService;
 import org.json.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -18,9 +20,11 @@ public class CoordinatesController {
     @Autowired
     ILocationService locationService;
 
+    static int id = 1;
     @Autowired
     IDatabase database;
 
+    private final Logger logger = LoggerFactory.getLogger(this.getClass());
     @RequestMapping(value="/login", method = RequestMethod.GET)
     public ResponseEntity<String> login(){
         return new ResponseEntity<>(new String("hello"), HttpStatus.OK);
@@ -29,7 +33,7 @@ public class CoordinatesController {
     @RequestMapping(value = "/coordinates", method = RequestMethod.GET, produces = "application/json")
     public ResponseEntity<String> getAddressLatLong(@RequestParam(value = "address") String address) {
         JSONObject finalResponse = new JSONObject();
-
+        logger.debug("hi from logger");
         GeocodingResult results;
         try {
             results = locationService.getCoordinates(address);
@@ -54,12 +58,11 @@ public class CoordinatesController {
         JSONObject finalResponse = new JSONObject();
         String origin;
         String destination;
-
         try {
             origin = requestParams.get("origin");
             destination = requestParams.get("destination");
 
-            database.inputClientSession(1, origin+destination);
+            database.inputClientSession(id++, origin+destination);
         } catch (Exception e) {
             finalResponse.put("error", "Request parameters \"origin\" and \"destination\" not found.");
             return new ResponseEntity<>(finalResponse.toString(), HttpStatus.BAD_REQUEST);
