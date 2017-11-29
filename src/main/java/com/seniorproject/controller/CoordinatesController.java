@@ -33,7 +33,6 @@ public class CoordinatesController {
     @RequestMapping(value = "/coordinates", method = RequestMethod.GET, produces = "application/json")
     public ResponseEntity<String> getAddressLatLong(@RequestParam(value = "address") String address) {
         JSONObject finalResponse = new JSONObject();
-        logger.debug("hi from logger");
         GeocodingResult results;
         try {
             results = locationService.getCoordinates(address);
