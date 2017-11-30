@@ -5,6 +5,8 @@ import com.google.gson.GsonBuilder;
 import com.google.maps.*;
 import com.google.maps.errors.ApiException;
 import com.google.maps.model.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -14,7 +16,7 @@ import java.io.IOException;
 public class LocationService implements ILocationService {
     private GeoApiContext context;
     private Gson gson;
-
+    private final Logger logger = LoggerFactory.getLogger(this.getClass());
     @Autowired
     public LocationService(IDatabase database) {
         gson = new GsonBuilder().setPrettyPrinting().create();
@@ -28,12 +30,12 @@ public class LocationService implements ILocationService {
         try {
             results = GeocodingApi.geocode(this.context, address).await();
         } catch (ApiException e) {
-            e.printStackTrace();
+            logger.error("error", e);
             return null;
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            logger.error("error", e);
         } catch (IOException e) {
-            e.printStackTrace();
+            logger.error("error", e);
             return null;
         }
         if (results.length > 0) {
@@ -50,9 +52,33 @@ public class LocationService implements ILocationService {
             }
             return distanceMatrix;
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("error", e);
             return null;
         }
     }
 
+    public GeocodingResult getAddress(String lat, String lng) {
+        GeocodingResult[] results = new GeocodingResult[0];
+        double latD = Double.valueOf(lat);
+        double lngD = Double.valueOf(lng);
+        LatLng latLng = new LatLng(latD, lngD);
+
+        try {
+            results = GeocodingApi.reverseGeocode(this.context, latLng).await();
+        } catch (ApiException e) {
+            logger.error("error", e);
+            return null;
+        } catch (InterruptedException e) {
+            logger.error("error", e);
+        } catch (IOException e) {
+            logger.error("error", e);
+            return null;
+        }
+        if (results.length > 0) {
+            return results[0];
+        }
+
+        logger.error("error", "no results where found");
+        return null;
+    }
 }

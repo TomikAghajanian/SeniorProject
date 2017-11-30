@@ -1,11 +1,19 @@
 package com.seniorproject.services;
 
+import org.mindrot.jbcrypt.BCrypt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
+import javax.crypto.Cipher;
+import javax.crypto.spec.SecretKeySpec;
+import java.io.UnsupportedEncodingException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.sql.*;
+import java.util.Arrays;
+import java.util.Base64;
 
 @Service
 public class DatabaseService implements IDatabase {
@@ -13,8 +21,9 @@ public class DatabaseService implements IDatabase {
     private Connection connection = null;
     private String url = "jdbc:postgresql://localhost:5432/SeniorProject";
     private String username = "postgres";
-    private String password = "tomik";
-
+    private String password = "";
+    private static SecretKeySpec secretKey;
+    private static byte[] key;
 
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
@@ -41,10 +50,14 @@ public class DatabaseService implements IDatabase {
                 String key = null;
                 while (rs.next()) {
                     key = rs.getString("api_key");
-                    logger.debug("here's your api key= " + key);
                 }
+                String decryptedKey = decryptApiKey(key, connection);
                 connection.close();
-                return key;
+
+                if (decryptedKey != null) {
+                    return decryptedKey;
+                }
+                return null;
             } catch (Exception e) {
                 return e.getMessage();
             }
@@ -53,18 +66,78 @@ public class DatabaseService implements IDatabase {
         }
     }
 
-    public boolean inputClientSession(int id, String clientSession) {
-        Connection connection = getConnection();
-        String modifiedClientSession = "'" + clientSession + "'";
+    private String decryptApiKey(String apikeyEncrypted, Connection connection) {
         if (connection != null) {
             try {
                 Statement stmt = connection.createStatement();
                 ResultSet rs;
 
-                rs = stmt.executeQuery("INSERT INTO public.\"ClientSession\"(\"clientID\", \"request\") VALUES (" + id + "," + modifiedClientSession + ");");
-                logger.debug("success");
-                connection.close();
-                return true;
+                rs = stmt.executeQuery("SELECT decryptkey FROM public.\"DecryptionKey\"");
+                String decryptKey = null;
+                while (rs.next()) {
+                    decryptKey = rs.getString("decryptkey");
+                }
+
+
+                try {
+                    setKey(decryptKey);
+                    Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5PADDING");
+                    cipher.init(Cipher.DECRYPT_MODE, secretKey);
+                    connection.close();
+                    return new String(cipher.doFinal(Base64.getDecoder().decode(apikeyEncrypted)));
+                } catch (Exception e) {
+                    logger.error("Error while decrypting: " + e.toString());
+                    return null;
+                }
+            } catch (Exception e) {
+                logger.debug(e.getMessage());
+                return null;
+            }
+        } else {
+            return null;
+        }
+    }
+
+    public static void setKey(String myKey) {
+        MessageDigest sha = null;
+        try {
+            key = myKey.getBytes("UTF-8");
+            sha = MessageDigest.getInstance("SHA-1");
+            key = sha.digest(key);
+            key = Arrays.copyOf(key, 16);
+            secretKey = new SecretKeySpec(key, "AES");
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public boolean storeClientContext(String userID, String clientContext, long creationTime) {
+        Connection connection = getConnection();
+        if (connection != null) {
+            try {
+                Statement stmt = connection.createStatement();
+
+                //check if client exists first
+                ResultSet rs = stmt.executeQuery("SELECT \"clientID\" FROM public.\"ClientContext\" WHERE \"clientID\"='" + userID +"';");
+
+                boolean clientExists = rs.next();
+                logger.debug("client already exists: {}", clientExists);
+
+                if(!clientExists) {
+
+                    logger.info("Client does NOT exist in db. Adding userID and context...");
+                    stmt.executeUpdate("INSERT INTO public.\"ClientContext\"(request, \"clientID\" , creationtime) VALUES ('" + clientContext + "','" + userID + "','" + String.valueOf(creationTime) + "');");
+                    connection.close();
+                    return true;
+                }
+                else {
+                    logger.info("Client does exist in db. Updating context...");
+                    stmt.executeUpdate("UPDATE public.\"ClientContext\" SET request='" + clientContext + "', creationtime='" + creationTime + "' WHERE \"clientID\"='" + userID + "';");
+                    connection.close();
+                    return true;
+                }
             } catch (Exception e) {
                 logger.error(e.getMessage());
                 return false;
@@ -80,7 +153,7 @@ public class DatabaseService implements IDatabase {
             try {
                 Statement stmt = connection.createStatement();
                 stmt.executeUpdate(
-                        "INSERT INTO public.\"Oauth\"(\"userID\", access_token, refresh_token, accesstoken_creationtime, refreshtoken_creationtime) VALUES ('" + userID + "', '" + accessToken + "', '" + refreshToken + "', '" + accessTokenCreationTime + "', '"+ refreshTokenCreationTime+"');");
+                        "INSERT INTO public.\"Oauth\"(\"userID\", access_token, refresh_token, accesstoken_creationtime, refreshtoken_creationtime) VALUES ('" + userID + "', '" + accessToken + "', '" + refreshToken + "', '" + accessTokenCreationTime + "', '" + refreshTokenCreationTime + "');");
                 connection.close();
                 return true;
             } catch (Exception e) {
@@ -100,12 +173,20 @@ public class DatabaseService implements IDatabase {
                 ResultSet rs;
 
                 rs = stmt.executeQuery(
-                        "SELECT username FROM public.\"ClientLogin\" WHERE username = '" + userInfo[0] + "' AND password='" + userInfo[1] + "'");
+                        "SELECT password FROM public.\"ClientLogin\" WHERE username = '" + userInfo[0] + "'");
 
-                boolean result = rs.next();
-                logger.debug("username found = " + result);
+                String hashedPassword = null;
+                while (rs.next()) {
+                    hashedPassword = rs.getString("password");
+                }
+
                 connection.close();
-                return result;
+                logger.debug("hashed password is {} ", hashedPassword);
+
+                if (checkPassword(userInfo[1], hashedPassword)) {
+                    return true;
+                }
+                return false;
             } catch (Exception e) {
                 logger.error(e.getMessage());
                 return false;
@@ -114,6 +195,18 @@ public class DatabaseService implements IDatabase {
             return false;
         }
     }
+
+    private boolean checkPassword(String password_plaintext, String stored_hash) {
+        boolean password_verified = false;
+
+        if (null == stored_hash || !stored_hash.startsWith("$2a$"))
+            return false;
+
+        password_verified = BCrypt.checkpw(password_plaintext, stored_hash);
+
+        return (password_verified);
+    }
+
 
     public boolean validateAccessToken(String userID, String accessToken, long accessTokenExp) {
         Connection connection = getConnection();
@@ -133,15 +226,10 @@ public class DatabaseService implements IDatabase {
                 }
                 connection.close();
 
-                logger.debug("current time in mili: {}", System.currentTimeMillis());
                 long cuurentTimeSubtractedAccessTokenExp = System.currentTimeMillis() - accessTokenExp;
-                logger.debug("cuurentTimeSubtractedAccessTokenExp: {}", cuurentTimeSubtractedAccessTokenExp);
-
                 if (Long.valueOf(accesstoken_creationtime) > cuurentTimeSubtractedAccessTokenExp) {
-                    logger.info("access token is valid and not expired yet");
                     return true;
                 }
-                logger.info("access token is not valid");
                 return false;
             } catch (Exception e) {
                 logger.error(e.getMessage());
@@ -167,19 +255,14 @@ public class DatabaseService implements IDatabase {
                 String refreshtoken_creationtime = null;
                 if (rs.next()) {
                     refreshtoken_creationtime = rs.getString(1);
-                    logger.debug("access token creationtime time is {} ", Long.valueOf(refreshtoken_creationtime));
                 }
                 connection.close();
 
-                logger.debug("current time in mili: {}", System.currentTimeMillis());
                 long cuurentTimeSubtractedAccessTokenExp = System.currentTimeMillis() - refreshTokenExp;
-                logger.debug("cuurentTimeSubtractedAccessTokenExp: {}", cuurentTimeSubtractedAccessTokenExp);
 
                 if (Long.valueOf(refreshtoken_creationtime) > cuurentTimeSubtractedAccessTokenExp) {
-                    logger.info("refresh token is valid and not expired yet");
                     return true;
                 }
-                logger.info("refresh token is not valid");
                 return false;
             } catch (Exception e) {
                 logger.error(e.getMessage());
@@ -199,8 +282,6 @@ public class DatabaseService implements IDatabase {
 
                 stmt.executeUpdate(
                         "UPDATE public.\"Oauth\" SET access_token='" + newAccessToken + "', accesstoken_creationtime= '" + accessTokenCreationTime + "' WHERE \"userID\"='" + userID + "'");
-
-
                 connection.close();
                 logger.info("successfully updated the new access token");
                 return true;

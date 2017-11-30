@@ -19,8 +19,8 @@ import java.util.concurrent.TimeUnit;
 
 @Component
 public class FilterRequest implements Filter {
-    private final static long ACCESS_TOKEN_EXPTIME = 30000;
-    private final static long REFRESH_TOKEN_EXPTIME = 240000;
+    private final static long ACCESS_TOKEN_EXPTIME = 300000;
+    private final static long REFRESH_TOKEN_EXPTIME = 600000;
 
     @Autowired
     private IDatabase database;
@@ -39,20 +39,21 @@ public class FilterRequest implements Filter {
         HttpServletResponse response = (HttpServletResponse) servletResponse;
         response.setContentType("application/json");
 
-        logger.debug("inside filter");
+        logger.debug("Filtering Request...");
         String uri = request.getRequestURI().toString();
 
-        logger.debug("URI = {}", uri);
-
+        logger.debug("Client trying to access {} endpoint", uri);
         if (uri.equals("/login")) {
             final String authorization = request.getHeader("Authorization");
             if (authorization != null && authorization.startsWith("Basic")) {
                 String base64Credentials = authorization.substring("Basic".length()).trim();
                 String credentials = new String(Base64.getDecoder().decode(base64Credentials), Charset.forName("UTF-8"));
+                logger.debug("client provided basic auth");
                 final String[] userAndPass = credentials.split(":", 2);
+
                 boolean isValid = database.validateUser(userAndPass);
                 if (isValid) {
-                    logger.debug("user is valid. Provide tokens to user now");
+                    logger.debug("User is Authorized.");
                     JSONObject jsonResponse = null;
                     try {
                         jsonResponse = new JSONObject(providedTokens());
@@ -65,14 +66,14 @@ public class FilterRequest implements Filter {
                     out.flush();
 
                 } else {
-                    logger.error("user not valid");
+                    logger.error("Unauthorized user!");
                     response.sendError(HttpStatus.BAD_REQUEST.value(), "user not valid");
                 }
             } else {
                 logger.error("no basic authorization provided");
                 response.sendError(HttpStatus.BAD_REQUEST.value(), "no basic authorization provided");
             }
-        } else if (uri.equals("/coordinates") || uri.equals("/distanceandduration")) {
+        } else if (uri.equals("/coordinates") || uri.equals("/distanceandduration") || uri.equals("/latlong")) {
             if (request.getHeader("AccessToken") != null && request.getHeader("UserID") != null) {
 
                 //grab userId and accesstoken from header
@@ -84,7 +85,7 @@ public class FilterRequest implements Filter {
                     logger.info("access token is VALID");
                     filterChain.doFilter(servletRequest, servletResponse);
                 } else {
-                    logger.error("access token is NOT VALID");
+                    logger.error("access token is EXPIRED");
                     response.sendError(HttpStatus.BAD_REQUEST.value(), "access token is expired");
                 }
             } else {
@@ -114,7 +115,7 @@ public class FilterRequest implements Filter {
                         response.sendError(HttpStatus.INTERNAL_SERVER_ERROR.value(), "unexpected internal error");
                     }
                 } else {
-                    logger.error("refresh token is NOT VALID");
+                    logger.error("refresh token is EXPIRED");
                     response.sendError(HttpStatus.BAD_REQUEST.value(), "refresh token is expired");
                 }
             }else {

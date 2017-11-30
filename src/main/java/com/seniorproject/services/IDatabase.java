@@ -5,7 +5,7 @@ import java.sql.Connection;
 public interface IDatabase {
     Connection getConnection();
     String getApiKey();
-    boolean inputClientSession(int id, String clientSession);
+    boolean storeClientContext(String userID, String clientContext, long creationTime);
     boolean storeTokens(String userID, String accessToken, String refreshToken, String accessTokenCreationTime, String refreshTokenCreationTime);
     boolean validateUser(String[] userInfo);
     boolean validateAccessToken(String userID, String accessToken, long accessTokenExp);
